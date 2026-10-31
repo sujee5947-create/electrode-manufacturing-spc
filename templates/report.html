@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Electrode Quality SPC Monitoring System | Engineering Quality Report</title>
+  <style>
+    {{ css_content }}
+  </style>
+  <!-- Embedded Plotly.js for 100% Offline Standalone Operation -->
+  <script>{{ plotly_js }}</script>
+</head>
+<body>
+
+  <!-- Header Banner -->
+  <header class="header-banner">
+    <h1>ELECTRODE QUALITY SPC MONITORING SYSTEM</h1>
+    <p class="subtitle">배터리 전극 제조 공정 자동 품질 판정 및 통계적 공정 관리(SPC) 엔지니어링 보고서</p>
+    <div class="meta-tags">
+      <span class="badge badge-primary">제조 공정: 전극 코팅 (Coating)</span>
+      <span class="badge badge-primary">데이터: N={{ summary.total_count }} 측정점</span>
+      <span class="badge badge-primary">분석 주기: {{ interval_minutes }}분 단위 인터벌</span>
+      <span class="badge {{ 'badge-ok' if summary.ng_rate_pct < 5.0 else 'badge-ng' }}">공정 불량률: {{ "%.2f"|format(summary.ng_rate_pct) }}%</span>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Navigation Bar -->
+    <nav class="nav-bar">
+      <a href="#sec-summary" class="nav-link active">1. 요약 (Summary)</a>
+      <a href="#sec-kpi" class="nav-link">2. KPI</a>
+      <a href="#sec-spec" class="nav-link">3. SPEC 규격</a>
+      <a href="#sec-spc" class="nav-link">4. SPC 관리도</a>
+      <a href="#sec-time" class="nav-link">5. 시간대별 분석</a>
+      <a href="#sec-hotspot" class="nav-link">6. NG Hotspot</a>
+      <a href="#sec-process" class="nav-link">7. 공정 조건 연계</a>
+      <a href="#sec-vision" class="nav-link">8. 비전 결함</a>
+      <a href="#sec-lot-machine" class="nav-link">9. LOT/설비 비교</a>
+      <a href="#sec-capability" class="nav-link">10. 공정능력(Cpk)</a>
+      <a href="#sec-insights" class="nav-link">11. 자동 분석 요약</a>
+      <a href="#sec-conclusions" class="nav-link">12. 결론 및 제언</a>
+    </nav>
+
+    <!-- 1. Executive Summary -->
+    <section id="sec-summary" class="section">
+      <div class="section-header">
+        <h2>1. Executive Summary</h2>
+        <p>전체 공정 품질 현황 및 핵심 엔지니어링 분석 결과 요약</p>
+      </div>
+
+      <div class="callout-box">
+        <h3>■ 핵심 관찰 결과 (Key Engineering Takeaways)</h3>
+        <ul>
+          {% for takeaway in automated_summary.key_takeaways %}
+          <li><strong>{{ loop.index }}.</strong> {{ takeaway }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <h4 style="margin-bottom: 0.5rem; color: var(--primary);">품질 판정 요약</h4>
+          <p style="font-size: 0.95rem; color: var(--text-dark); margin-bottom: 0.5rem;">
+            {{ automated_summary.overall_summary[0] }}
+          </p>
+          <p style="font-size: 0.95rem; color: var(--text-dark); margin-bottom: 0.5rem;">
+            {{ automated_summary.overall_summary[1] }}
+          </p>
+          <p style="font-size: 0.95rem; color: var(--text-dark);">
+            {{ automated_summary.overall_summary[2] }}
+          </p>
+        </div>
+        <div>
+          <h4 style="margin-bottom: 0.5rem; color: var(--primary);">이상 집중 구간 및 공정 영향</h4>
+          <p style="font-size: 0.95rem; color: var(--text-dark); margin-bottom: 0.5rem;">
+            {{ automated_summary.time_summary[0] if automated_summary.time_summary else "" }}
+          </p>
+          <p style="font-size: 0.95rem; color: var(--text-dark); margin-bottom: 0.5rem;">
+            {{ automated_summary.time_summary[1] if automated_summary.time_summary|length > 1 else "" }}
+          </p>
+          <p style="font-size: 0.95rem; color: var(--text-dark);">
+            {{ automated_summary.capability_summary[0] if automated_summary.capability_summary else "" }}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Quality KPI Cards -->
+    <section id="sec-kpi" class="section">
+      <div class="section-header">
+        <h2>2. Quality KPI Dashboard</h2>
+        <p>전체 측정 로트의 핵심 품질 판정 지표</p>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">총 검사 건수</div>
+          <div class="kpi-value">{{ "{:,}".format(summary.total_count) }}</div>
+          <div class="kpi-sub">Total Inspection Rows</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">정상 합격 (OK)</div>
+          <div class="kpi-value ok">{{ "{:,}".format(summary.ok_count) }}</div>
+          <div class="kpi-sub">수율 {{ "%.2f"|format(summary.ok_rate_pct) }}%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">규격 이탈 (NG)</div>
+          <div class="kpi-value ng">{{ "{:,}".format(summary.ng_count) }}</div>
+          <div class="kpi-sub">불량률 {{ "%.2f"|format(summary.ng_rate_pct) }}%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">복합 불량 행</div>
+          <div class="kpi-value">{{ summary.multi_defect_rows }}</div>
+          <div class="kpi-sub">2개 이상 특성 동시 NG</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">이상 집중 구간 (Hotspot)</div>
+          <div class="kpi-value">{{ hotspots|length }}</div>
+          <div class="kpi-sub">기준치 초과 탐지 구간</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. SPEC Compliance & Pareto -->
+    <section id="sec-spec" class="section">
+      <div class="section-header">
+        <h2>3. SPEC Compliance & Pareto Analysis</h2>
+        <p>품질 특성별 규격 기준 및 불량 기여도 분석</p>
+      </div>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>품질 특성</th>
+              <th>Raw 컬럼</th>
+              <th>단위</th>
+              <th>LSL (하한)</th>
+              <th>TARGET (목표)</th>
+              <th>USL (상한)</th>
+              <th>검사수</th>
+              <th>NG 건수</th>
+              <th>NG 비율</th>
+              <th>NG LOW</th>
+              <th>NG HIGH</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in summary.char_stats %}
+            <tr>
+              <td><strong>{{ c.characteristic }}</strong></td>
+              <td><code>{{ c.raw_column }}</code></td>
+              <td>{{ c.unit }}</td>
+              <td>{{ c.LSL if c.LSL is not none else "-" }}</td>
+              <td>{{ c.TARGET }}</td>
+              <td>{{ c.USL }}</td>
+              <td>{{ c.total }}</td>
+              <td style="color: {{ 'var(--accent-ng)' if c.ng_count > 0 else 'inherit' }}; font-weight: bold;">{{ c.ng_count }}</td>
+              <td>{{ "%.2f"|format(c.ng_rate_pct) }}%</td>
+              <td>{{ c.ng_low_count }}</td>
+              <td>{{ c.ng_high_count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pareto Plotly Chart -->
+      <div id="chart-pareto" class="chart-box"></div>
+    </section>
+
+    <!-- 4. SPC Monitoring -->
+    <section id="sec-spc" class="section">
+      <div class="section-header">
+        <h2>4. SPC Monitoring (I-MR Control Charts)</h2>
+        <p>연속형 품질 특성의 개별값(I) 및 이동범위(MR) 관리도 모니터링</p>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label for="spc-select">품질 특성 선택:</label>
+          <select id="spc-select" onchange="switchSPCChart(this.value)">
+            {% for col, label in spc_select_options %}<option value="{{ col|e }}">{{ label|e }} ({{ col|e }})</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div id="chart-spc-imr" class="chart-box"></div>
+    </section>
+
+    <!-- 5. Time-based NG Trend -->
+    <section id="sec-time" class="section">
+      <div class="section-header">
+        <h2>5. Time-Series Defect Trend ({{ interval_minutes }}분 인터벌)</h2>
+        <p>시간 경과에 따른 검사 건수 및 불량률(NG Rate) 변동 추이</p>
+      </div>
+
+      <div id="chart-time-trend" class="chart-box"></div>
+      
+      <h4 style="margin: 1.5rem 0 0.75rem 0; color: var(--primary);">일자별 × 시간대별 불량 히트맵 (Heatmap)</h4>
+      <div id="chart-heatmap" class="chart-box"></div>
+    </section>
+
+    <!-- 6. NG Hotspot Analysis -->
+    <section id="sec-hotspot" class="section">
+      <div class="section-header">
+        <h2>6. NG Hotspot Detection & Multi-Tier Clustering</h2>
+        <p>전체 {{ hotspot_data.summary_counts.total_intervals }}개 구간, NG 발생 {{ hotspot_data.summary_counts.ng_active_intervals }}개
+        (고위험 {{ hotspot_data.summary_counts.severe_count }}, 주의 {{ hotspot_data.summary_counts.warning_count }}, 산발 {{ hotspot_data.summary_counts.minor_count }}, 표본부족 {{ hotspot_data.summary_counts.insufficient_count }}개). 운영 경보이며 통계적 유의성 검정 결과는 아닙니다.</p>
+      </div>
+
+      <div class="kpi-grid" style="margin-bottom: 1rem;">
+        <div class="kpi-card">
+          <div class="kpi-title">고위험 집중 구간 (Tier 1)</div>
+          <div class="kpi-value ng">{{ hotspot_data.severe_hotspots|length }}개소</div>
+          <div class="kpi-sub">NG ≥ 3건 & 불량률 ≥ 20.0%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">주의 군집 구간 (Tier 2)</div>
+          <div class="kpi-value" style="color: #d97706;">{{ hotspot_data.warning_clusters|length }}개소</div>
+          <div class="kpi-sub">NG ≥ 2건 & 기준 평균 대비 위험도 상승</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">산발 불량 구간 (Tier 3)</div>
+          <div class="kpi-value">{{ hotspot_data.summary_counts.minor_count }}개소</div>
+          <div class="kpi-sub">NG = 1건 발생 구간</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">불량 미발생 정상 구간</div>
+          <div class="kpi-value ok">{{ hotspot_data.summary_counts.clean_intervals }}개소</div>
+          <div class="kpi-sub">NG = 0건 (완전 무결)</div>
+        </div>
+      </div>
+
+      <!-- Tier 1 & Tier 2 Hotspot Table -->
+      <h4 style="margin: 1.25rem 0 0.5rem 0; color: var(--primary);">■ 통계적 집중 관리 대상 구간 (고위험 2개소 + 주의 7개소)</h4>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>관리 등급</th>
+              <th>집중 발생 시간대</th>
+              <th>검사 건수</th>
+              <th>NG 건수</th>
+              <th>NG 비율</th>
+              <th>공정 평균 대비</th>
+              <th>주요 불량 항목</th>
+              <th>생산 설비</th>
+              <th>생산 LOT</th>
+              <th>판정 사유</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in hotspot_data.severe_hotspots %}
+            <tr style="background-color: #fdf2f2;">
+              <td><span class="badge badge-ng">고위험 (Tier 1)</span></td>
+              <td><strong>{{ h.period_label }}</strong></td>
+              <td>{{ h.total_count }}</td>
+              <td style="color: var(--accent-ng); font-weight: bold;">{{ h.ng_count }}</td>
+              <td style="color: var(--accent-ng); font-weight: bold;">{{ "%.1f"|format(h.ng_rate_pct) }}%</td>
+              <td>+{{ "%.1f"|format(h.diff_pp) }}%p</td>
+              <td><strong>{{ h.primary_defect }}</strong></td>
+              <td>{{ h.machines }}</td>
+              <td>{{ h.lots }}</td>
+              <td style="font-size: 0.85rem; color: #b91c1c;">{{ h.detection_reason }}</td>
+            </tr>
+            {% endfor %}
+            {% for h in hotspot_data.warning_clusters %}
+            <tr>
+              <td><span class="badge" style="background: #fef3c7; color: #92400e;">주의 (Tier 2)</span></td>
+              <td><strong>{{ h.period_label }}</strong></td>
+              <td>{{ h.total_count }}</td>
+              <td style="color: #b45309; font-weight: bold;">{{ h.ng_count }}</td>
+              <td style="color: #b45309; font-weight: bold;">{{ "%.1f"|format(h.ng_rate_pct) }}%</td>
+              <td>+{{ "%.1f"|format(h.diff_pp) }}%p</td>
+              <td><strong>{{ h.primary_defect }}</strong></td>
+              <td>{{ h.machines }}</td>
+              <td>{{ h.lots }}</td>
+              <td style="font-size: 0.85rem; color: #78350f;">{{ h.detection_reason }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Expandable All NG Intervals Table -->
+      <details style="margin-top: 1rem; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem;">
+        <summary style="font-weight: 700; cursor: pointer; color: var(--primary);">
+          🔍 전체 불량 발생 시간대 전체 목록 펼치기 (총 {{ hotspot_data.all_ng_periods|length }}개 구간 전체 보기)
+        </summary>
+        <div class="table-responsive" style="margin-top: 0.75rem;">
+          <table>
+            <thead>
+              <tr>
+                <th>등급</th>
+                <th>시간대</th>
+                <th>검사수</th>
+                <th>NG수</th>
+                <th>NG율</th>
+                <th>주요 불량</th>
+                <th>설비</th>
+                <th>LOT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for h in hotspot_data.all_ng_periods %}
+              <tr>
+                <td><span class="badge {{ 'badge-ng' if h.tier == 'TIER_1_SEVERE' else 'badge-primary' }}">{{ h.status_label }}</span></td>
+                <td>{{ h.period_label }}</td>
+                <td>{{ h.total_count }}</td>
+                <td>{{ h.ng_count }}</td>
+                <td>{{ "%.1f"|format(h.ng_rate_pct) }}%</td>
+                <td>{{ h.primary_defect }}</td>
+                <td>{{ h.machines }}</td>
+                <td>{{ h.lots }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <!-- 7. Process Condition Analysis -->
+    <section id="sec-process" class="section">
+      <div class="section-header">
+        <h2>7. Process Conditions & Correlation Analysis</h2>
+        <p>불량 집중 구간 전/후 공정 운전 조건(속도, 온도, 롤압력)의 변동 비교</p>
+      </div>
+
+      <div id="chart-process-timeline" class="chart-box"></div>
+
+      {% for pc in process_correlations %}
+      <div class="attribution-card">
+        <h4 style="color: var(--primary); margin-bottom: 0.75rem;">
+          [집중 구간: {{ pc.hotspot_period }}] 주요 불량: {{ pc.primary_defect }}
+        </h4>
+        
+        <div class="tier-item fact">
+          <div class="tier-label">1. 확인된 사실 (Confirmed Fact)</div>
+          <div>{{ pc.statements.confirmed_fact }}</div>
+        </div>
+        <div class="tier-item change">
+          <div class="tier-label">2. 연관된 변화 (Associated Change)</div>
+          <div>{{ pc.statements.associated_change }}</div>
+        </div>
+        <div class="tier-item investigate">
+          <div class="tier-label">3. 추가 검토 필요 (Requires Investigation)</div>
+          <div>{{ pc.statements.requires_investigation }}</div>
+        </div>
+
+        <div style="margin-top: 1rem;" class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>공정 인자</th>
+                <th>전 30분 평균</th>
+                <th>집중 구간 평균</th>
+                <th>후 30분 평균</th>
+                <th>집중 구간 변화량</th>
+                <th>집중 구간 표준편차</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p_key, p_val in pc.process_metrics.items() %}
+              <tr>
+                <td><strong>{{ p_val.name }}</strong></td>
+                <td>{{ p_val.windows.before.mean if p_val.windows.before.mean is not none else "-" }}{{ p_val.unit }}</td>
+                <td style="font-weight: bold; color: var(--primary);">{{ p_val.windows.during.mean if p_val.windows.during.mean is not none else "-" }}{{ p_val.unit }}</td>
+                <td>{{ p_val.windows.after.mean if p_val.windows.after.mean is not none else "-" }}{{ p_val.unit }}</td>
+                <td style="color: {{ 'var(--accent-ng)' if p_val.windows.during.delta_from_prev and p_val.windows.during.delta_from_prev|abs > 1 else 'inherit' }}; font-weight: bold;">
+                  {{ "%+.2f"|format(p_val.windows.during.delta_from_prev) if p_val.windows.during.delta_from_prev is not none else "-" }}{{ p_val.unit }}
+                </td>
+                <td>{{ p_val.windows.during.std if p_val.windows.during.std is not none else "-" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endfor %}
+    </section>
+
+    <!-- 8. Vision Defect Analysis -->
+    <section id="sec-vision" class="section">
+      <div class="section-header">
+        <h2>8. Vision Defect Analysis (C-Chart)</h2>
+        <p>표면 비전 검사 결함(크레이터, 열주름) 계수형 관리도 모니터링</p>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label for="vision-select">비전 결함 선택:</label>
+          <select id="vision-select" onchange="switchVisionChart(this.value)">
+            {% for col, label in vision_select_options %}<option value="{{ col|e }}">{{ label|e }} ({{ col|e }})</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div id="chart-vision" class="chart-box"></div>
+    </section>
+
+    <!-- 9. LOT & Equipment Comparison -->
+    <section id="sec-lot-machine" class="section">
+      <div class="section-header">
+        <h2>9. LOT & Equipment Comparison</h2>
+        <p>생산 단위(LOT) 및 설비별 품질 불량률 편차</p>
+      </div>
+
+      <div class="grid-2">
+        <div id="chart-lot-compare" class="chart-box"></div>
+        <div id="chart-machine-compare" class="chart-box"></div>
+      </div>
+    </section>
+
+    <!-- 10. Capability Analysis -->
+    <section id="sec-capability" class="section">
+      <div class="section-header">
+        <h2>10. Process Capability (Cp / Cpk / Pp / Ppk)</h2>
+        <p>전체 데이터셋(N={{ summary.total_count }}, MR_bar/1.128 기준) 및 잠정 Baseline(N={{ baseline_n }}) 비교 공정능력 지수</p>
+      </div>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>품질 특성</th>
+              <th>평균 (Mean)</th>
+              <th>군내 표준편차(σ_w)</th>
+              <th>전체 표준편차(s)</th>
+              <th>Cp</th>
+              <th>★ Cpk (N={{ summary.total_count }})</th>
+              <th>Pp</th>
+              <th>★ Ppk (N={{ summary.total_count }})</th>
+              <th>참고: Cpk (Baseline)</th>
+              <th>규격이탈수(율)</th>
+              <th>공정능력 평가</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for col, cap in capability.items() %}
+            {% if cap.applicable %}
+            <tr>
+              <td><strong>{{ cap.characteristic }}</strong></td>
+              <td>{{ cap.mean }} {{ cap.unit }}</td>
+              <td>{{ cap.sigma_within }}</td>
+              <td>{{ cap.std_overall }}</td>
+              <td>{{ cap.cp if cap.cp is not none else "-" }}</td>
+              <td style="font-weight: 800; font-size: 1.05rem; color: {{ 'var(--accent-ng)' if cap.cpk and cap.cpk < 1.00 else 'var(--accent-ok)' }};">
+                {{ "%.3f"|format(cap.cpk) if cap.cpk is not none else "-" }}
+              </td>
+              <td>{{ cap.pp if cap.pp is not none else "-" }}</td>
+              <td style="font-weight: 800; font-size: 1.05rem;">
+                {{ "%.3f"|format(cap.ppk) if cap.ppk is not none else "-" }}
+              </td>
+              <td style="color: var(--text-muted); font-size: 0.85rem;">
+                {{ "%.3f"|format(cap.cpk_baseline_ref) if cap.cpk_baseline_ref is not none else "-" }}
+              </td>
+              <td>{{ cap.out_of_spec_count }}건 ({{ cap.out_of_spec_rate_pct }}%)</td>
+              <td><span class="badge {{ 'badge-ok' if cap.cpk and cap.cpk >= 1.33 else 'badge-ng' }}">{{ cap.capability_level }}</span></td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-box">
+        <h3>■ 공정능력 지수 산출 기준 및 수치 검증 가이드</h3>
+        <ul>
+          <li><strong>공정능력 계산:</strong> 전체 {{ summary.total_count }}건에서 설비별 연속 측정값의 MR 평균을 사용하여 군내 표준편차(σ=MR_bar/1.128)를 추정한 Cp/Cpk를 표시합니다. Pp/Ppk는 전체 표본의 표준편차를 사용합니다.</li>
+          <li><strong>잠정 Baseline:</strong> 관리도 한계는 각 설비의 초기 구간을 기준으로 별도 확인해야 합니다. 위 Baseline 참고 Cpk는 비교를 위한 값이며, 안정성이 검증되지 않은 한 공식 승인 기준으로 사용할 수 없습니다.</li>
+          <li><strong>설비 혼합 주의:</strong> 여러 설비가 섞인 전체 데이터 공정능력은 참고용입니다. 실제 제조 판단은 설비별 관리도 안정성 및 측정시스템 적합성을 먼저 검토해야 합니다.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 11. Automated Analysis Insights -->
+    <section id="sec-insights" class="section">
+      <div class="section-header">
+        <h2>11. Automated Analysis Summary (Rule-based Insights Engine)</h2>
+        <p>인공지능 API 호출 없이 순수 규칙 기반으로 산출된 표준 엔지니어링 요약문</p>
+      </div>
+
+      <div class="callout-box">
+        <h3>1. 전체 품질 판정 요약</h3>
+        <ul>
+          {% for p in automated_summary.overall_summary %}
+          <li>{{ p }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="callout-box">
+        <h3>2. 시간대별 이상 집중 요약</h3>
+        <ul>
+          {% for p in automated_summary.time_summary %}
+          <li>{{ p }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="callout-box">
+        <h3>3. 공정 조건 연관 분석 요약</h3>
+        <ul>
+          {% for p in automated_summary.process_summary %}
+          <li>{{ p }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+
+    <!-- 12. Conclusions & Next Steps -->
+    <section id="sec-conclusions" class="section">
+      <div class="section-header">
+        <h2>12. Conclusions & System Roadmap</h2>
+        <p>종합 결론 및 기가팩토리 품질 모니터링 시스템 확장 방안</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="attribution-card">
+          <h4 style="color: var(--primary); margin-bottom: 0.5rem;">시스템의 가치와 활용성</h4>
+          <ul style="padding-left: 1.25rem; font-size: 0.95rem;">
+            <li>SPEC 시트 수정만으로 수식/코드 변경 없이 자동 품질 판정 및 SPC 갱신</li>
+            <li>단순 불량 집계를 넘어 시계열 클러스터링(Hotspot) 자동 감지로 신속한 초기 대응 지원</li>
+            <li>공정 조건(온도, 속도, 압력)과 결함 발생의 시계열 동기화로 상관관계 가시화</li>
+            <li>비즈니스용 PPTX 및 현장용 반응형 HTML 동시 원클릭 생성</li>
+          </ul>
+        </div>
+        <div class="attribution-card">
+          <h4 style="color: var(--primary); margin-bottom: 0.5rem;">향후 확장 계획 (Roadmap)</h4>
+          <ul style="padding-left: 1.25rem; font-size: 0.95rem;">
+            <li>설비 이벤트 로그(<code>equipment_event_log.csv</code>) 연계를 통한 정지/알람 실시간 결합</li>
+            <li>슬러리 믹싱 점도 및 활물질 로딩량 등 상위 공정 파라미터와의 다변량 상관 분석</li>
+            <li>롤투롤(R2R) 실시간 스트리밍 아키텍처 및 현장 엔지니어 알림 연동</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>Electrode Quality SPC Monitoring & Automated Reporting System</p>
+    <p style="margin-top: 0.25rem; color: #94a3b8;">
+      Designed for Battery Cell Vendor Manufacturing Engineer Portfolio | 100% Automated Execution
+    </p>
+  </footer>
+
+  <!-- Interactive Chart Initializer Script -->
+  <script>
+    // Embedded Plotly Chart Data Payloads
+    const plotlyData = {{ plotly_payload_json }};
+
+    function renderCharts() {
+      const config = { responsive: true, displayModeBar: true, displaylogo: false };
+
+      // 1. Pareto Chart
+      if (plotlyData.pareto) {
+        Plotly.newPlot('chart-pareto', plotlyData.pareto.data, plotlyData.pareto.layout, config);
+      }
+
+      // 2. Time Trend
+      if (plotlyData.time_trend) {
+        Plotly.newPlot('chart-time-trend', plotlyData.time_trend.data, plotlyData.time_trend.layout, config);
+      }
+
+      // 3. Heatmap
+      if (plotlyData.heatmap) {
+        Plotly.newPlot('chart-heatmap', plotlyData.heatmap.data, plotlyData.heatmap.layout, config);
+      }
+
+      // 4. Initial SPC Chart
+      {% if spc_select_options %}switchSPCChart({{ spc_select_options[0][0]|tojson }});{% endif %}
+
+      // 5. Initial Vision Chart
+      {% if vision_select_options %}switchVisionChart({{ vision_select_options[0][0]|tojson }});{% endif %}
+
+      // 6. Process Timeline
+      if (plotlyData.process_timeline) {
+        Plotly.newPlot('chart-process-timeline', plotlyData.process_timeline.data, plotlyData.process_timeline.layout, config);
+      }
+
+      // 7. LOT & Machine Compare
+      if (plotlyData.lot_compare) {
+        Plotly.newPlot('chart-lot-compare', plotlyData.lot_compare.data, plotlyData.lot_compare.layout, config);
+      }
+      if (plotlyData.machine_compare) {
+        Plotly.newPlot('chart-machine-compare', plotlyData.machine_compare.data, plotlyData.machine_compare.layout, config);
+      }
+    }
+
+    function switchSPCChart(colName) {
+      const chartKey = 'spc_' + colName;
+      if (plotlyData[chartKey]) {
+        Plotly.newPlot('chart-spc-imr', plotlyData[chartKey].data, plotlyData[chartKey].layout, { responsive: true, displaylogo: false });
+      }
+    }
+
+    function switchVisionChart(colName) {
+      const chartKey = 'vision_' + colName;
+      if (plotlyData[chartKey]) {
+        Plotly.newPlot('chart-vision', plotlyData[chartKey].data, plotlyData[chartKey].layout, { responsive: true, displaylogo: false });
+      }
+    }
+
+    function setActiveNavLink(hash) {
+      const nav = document.querySelector('.nav-bar');
+      const links = document.querySelectorAll('.nav-bar .nav-link');
+      links.forEach((link) => {
+        const isActive = link.getAttribute('href') === hash;
+        link.classList.toggle('active', isActive);
+        if (isActive && nav) {
+          const offset = link.offsetLeft - (nav.clientWidth / 2) + (link.clientWidth / 2);
+          nav.scrollTo({ left: Math.max(0, offset), behavior: 'smooth' });
+        }
+      });
+    }
+
+    function initNavHighlight() {
+      const links = Array.from(document.querySelectorAll('.nav-bar .nav-link'));
+      if (!links.length) return;
+      let navLockUntil = 0;
+
+      links.forEach((link) => {
+        link.addEventListener('click', () => {
+          navLockUntil = Date.now() + 900;
+          setActiveNavLink(link.getAttribute('href'));
+        });
+      });
+
+      const sections = links
+        .map((link) => document.querySelector(link.getAttribute('href')))
+        .filter(Boolean);
+
+      const observer = new IntersectionObserver((entries) => {
+        if (Date.now() < navLockUntil) return;
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible.length) {
+          setActiveNavLink('#' + visible[0].target.id);
+        }
+      }, { rootMargin: '-25% 0px -55% 0px', threshold: [0.15, 0.35, 0.6] });
+
+      sections.forEach((section) => observer.observe(section));
+
+      if (window.location.hash) {
+        setActiveNavLink(window.location.hash);
+      }
+    }
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      renderCharts();
+      initNavHighlight();
+    });
+  </script>
+</body>
+</html>
