@@ -1,0 +1,172 @@
+﻿전극 제조 품질 SPC 자동화 프로그램 - 사용방법 (실무용 v2)
+====================================================
+
+[먼저 읽어주세요]
+이 프로그램은 입력한 Raw Data(CSV)와 SPEC(Excel)을 기준으로 매번 새로 분석합니다.
+NG 48건, NG 39건 등의 결과는 코드에 고정된 숫자가 아닙니다.
+데이터가 달라지면 NG 개수, 관리도, 공정능력, 보고서 수치도 달라집니다.
+
+전체 프로젝트 ZIP: 예시 Raw Data / SPEC / 결과물 / Python 코드 포함
+코드 전용 ZIP: 예시 Raw Data와 결과물 미포함 (본인 입력파일 준비 필요)
+주의: 이 패키지의 예시 SPEC은 가상 연습용으로, 현장 승인 규격이 아닙니다.
+
+1. 설치 준비 (최초 1회)
+----------------------------------------------------
+① ZIP 파일 압축을 풉니다. 예: C:\SPC\Electrode_Manufacturing_SPC_Practical_v2
+② Windows에 Python 3.10 이상을 설치하고, 설치 시 PATH 추가를 활성화합니다.
+③ 프로젝트 폴더를 탐색기에서 열고, 주소창에 cmd를 입력하여 엔터를 누릅니다.
+④ 아래 명령으로 라이브러리를 설치합니다.
+
+    python -m pip install -r requirements.txt
+
+※ python을 찾을 수 없다고 하면 설치 여부와 PATH를 확인하세요.
+   PC 환경에 따라 python 대신 py 명령을 사용할 수 있습니다.
+
+2. 가장 쉬운 실행 - 동봉된 예시 데이터
+----------------------------------------------------
+① 전체 프로젝트 ZIP 압축을 풉니다.
+② RUN_WINDOWS.bat 파일을 더블클릭합니다.
+③ [OK] Reports created in result folder. 메시지가 나오면 완료입니다.
+④ 같은 프로젝트 폴더의 result 폴더에서 결과 파일을 엽니다.
+
+또는 명령 프롬프트에서 아래처럼 실행해도 됩니다.
+
+    python main.py
+
+※ RUN_WINDOWS.bat와 위 기본 명령은 "동봉된 예시 CSV/SPEC"을 사용합니다.
+   새로운 실무 데이터 분석에는 3번의 경로 지정 실행을 사용하세요.
+
+3. 실무 Raw Data로 분석하기 - 가장 중요
+----------------------------------------------------
+① 새로 분석할 Raw Data CSV와 해당 규격 SPEC Excel을 준비합니다.
+② Raw Data와 SPEC 원본을 별도 폴더에 보관하고, 데이터는 직접 수정하지 않습니다.
+③ 프로젝트 폴더의 cmd 창에서 아래 명령을 실행합니다.
+
+    python main.py --raw "C:\Data\new_raw.csv" --spec "C:\Data\spec.xlsx" --output "C:\Data\SPC_Result" --interval 60 --baseline-n 200
+
+옵션 설명
+  --raw         : 실제로 분석할 Raw Data CSV의 전체 경로
+  --spec        : 실제 적용할 SPEC Excel의 전체 경로
+  --output      : 보고서가 생성될 출력 폴더 (미지정 시 result)
+  --interval    : 시간대 집계 간격, 분 단위 (기본 60)
+  --baseline-n  : 설비별 초기 SPC 기준 데이터 개수 (기본 200)
+  --event-log   : 선택 사항, 설비 이벤트 로그 CSV 경로
+
+예: LOT별로 결과를 보관하고 싶다면 --output 경로를 매번 다르게 지정합니다.
+예시) "C:\Data\Reports\LOT_20261031"
+같은 출력 폴더를 반복 사용하면 생성된 파일이 갱신될 수 있으므로 기존 보고서는 백업하세요.
+
+4. Raw Data / SPEC 형식
+----------------------------------------------------
+[Raw Data CSV]
+- timestamp 열은 필수이며 날짜/시간으로 정상 변환되어야 합니다.
+- SPEC에서 enabled=Y인 각 raw_column과 이름이 동일한 측정값 열이 있어야 합니다.
+- 설비별 분석을 하려면 machine_id 열과 유효한 설비 ID가 필요합니다.
+- LOT 분석용 lot_id, 공정 조건 컬럼이 있으면 관련 분석에 활용됩니다.
+- 동봉 샘플의 주요 열:
+  timestamp, lot_id, machine_id, inspection_area_m2,
+  line_speed_m_min, drying_temperature_c, roll_pressure,
+  uncoated_width_mm, coated_width_mm, uncoated_gap_mm,
+  coating_thickness_um, coating_weight_mg_cm2,
+  crater_count, heat_wrinkle_count
+- 결함 개수(count)는 0 이상의 정수여야 합니다.
+- 같은 이름의 열이 중복되거나 시간 형식이 잘못되면 오류가 발생할 수 있습니다.
+
+[SPEC Excel]
+- 시트 이름은 반드시 SPEC 입니다.
+- 필수 열:
+  raw_column, characteristic, unit, data_type,
+  LSL, TARGET, USL, chart_type, enabled
+- enabled=Y인 항목만 분석합니다.
+- continuous(연속형)에는 I-MR, count(개수형)에는 C 또는 U 관리도를 설정합니다.
+- USL/LSL과 TARGET은 측정단위 및 현장 승인 기준에 맞춰 작성해야 합니다.
+- U 관리도 사용 시 Raw CSV에 유효한 inspection_area_m2 열이 필요합니다.
+
+중요: 현재 U 관리도는 검사면적을 활용하여 결함률을 시각화하지만,
+행별 OK/NG 판정은 원시 결함 개수와 SPEC의 USL을 비교합니다.
+현장 규격이 '면적당 개수' 기준이라면 그대로 사용하지 말고 판정 로직을 수정해야 합니다.
+
+5. 생성되는 주요 결과물
+----------------------------------------------------
+입력한 --output 폴더 (기본 result) 안에 자동 생성됩니다.
+
+  evaluated_quality_data.csv          : 행별 OK/NG/INVALID 판정 결과
+  interval_aggregation.csv            : 시간대별 검사 수, NG 수 및 경보 집계
+  equipment_capability.csv            : 설비별 Cp/Cpk/Pp/Ppk 비교
+  equipment_spc_summary.json          : 설비별 SPC 계산 및 진단값
+  analysis_summary.json               : 주요 분석 결과 요약
+  run_manifest.json                   : 입력 파일 경로, SHA-256, 실행 조건 기록
+  Electrode_Quality_Calculation_Trace.xlsx : 계산 검토용 Excel
+  Electrode_Quality_SPC_Report.pptx   : 요약 발표 보고서
+  Electrode_Quality_SPC_Report.html   : 브라우저에서 보는 보고서
+  charts 폴더                        : SPC, Pareto, Trend 등 그래프
+
+확인 순서 추천:
+  ① evaluated_quality_data.csv에서 주요 NG를 확인
+  ② interval_aggregation.csv에서 이상 시간대를 확인
+  ③ equipment_capability.csv에서 설비별 지표 확인
+  ④ PPT/HTML에서 시각화 확인
+  ⑤ run_manifest.json에서 분석한 실제 파일과 실행 조건 확인
+
+※ Excel 파일의 일부 수식은 Microsoft Excel에서 열 때 재계산될 수 있습니다.
+   값이 비어 있으면 Excel의 '자동 계산' 설정을 확인하세요.
+
+6. 그래프를 보면서 확인하기 (선택)
+----------------------------------------------------
+프로젝트 폴더에서 아래 명령을 실행합니다.
+
+    streamlit run app.py
+
+웹 브라우저가 열리면 왼쪽 설정에서 Raw Data/SPEC 경로와
+시간 간격, 설비별 baseline 개수를 입력해 분석할 수 있습니다.
+보고서를 파일로 만들려면 왼쪽 '자동 보고서 (PPT & HTML) 생성' 버튼을 사용하세요.
+
+7. 코드 검증 테스트
+----------------------------------------------------
+프로젝트 폴더에서 TEST_WINDOWS.bat를 더블클릭하거나 아래를 실행합니다.
+
+    python -m pytest -q
+
+테스트 통과는 코드의 주요 기능 확인이며, 현장 규격 적합성 승인과는 다릅니다.
+
+8. 오류가 뜰 때 확인할 것
+----------------------------------------------------
+[python을 찾을 수 없음]
+  Python 설치 및 PATH 설정 확인. 새 cmd 창에서 python --version 확인.
+
+[No module named ...]
+  프로젝트 폴더에서 python -m pip install -r requirements.txt 재실행.
+
+[Raw Data 또는 SPEC 파일을 찾을 수 없음]
+  --raw/--spec의 전체 경로, 파일명, 확장자, 큰따옴표 확인.
+  잘못된 경로에 대해 다른 동명 파일을 자동으로 대신 읽지 않습니다.
+
+[SPEC sheet 또는 raw_column 관련 오류]
+  시트명 SPEC, enabled=Y 항목, Raw CSV 헤더 일치 여부 확인.
+  단위, 상하한 규격, numeric 값 오기입 여부 확인.
+
+[INVALID 또는 결측 관련 오류]
+  유효하지 않은 수치/빈칸/음수 결함 개수/소수 결함 개수를 확인.
+  기본 실행은 위험한 결과 생성을 막기 위해 중단할 수 있습니다.
+  --allow-invalid는 탐색용으로만 사용하고 정식 품질 보고에는 사용하지 마세요.
+
+[보고서와 기대한 NG 건수가 다름]
+  이번에 넣은 Raw Data 및 SPEC이 올바른지 확인하고,
+  run_manifest.json의 raw_input/spec_input과 SHA-256을 확인하세요.
+  NG 건수는 입력 데이터에 따라 달라지는 것이 정상입니다.
+
+9. 실무 사용 전 안전 확인
+----------------------------------------------------
+- 이 프로그램은 자동 분석 도구이며, 양산 품질 판정 기준의 승인 자체를 대신하지 않습니다.
+- 설비별 I-MR 관리한계는 충분한 안정 구간(Phase I) 확인 후 사용하세요.
+- 공정능력 Cp/Cpk는 공정 안정성 및 측정시스템의 영향을 받습니다.
+- Hotspot 경보는 운영상 기준이며, 통계적 인과관계 또는 유의성 증명이 아닙니다.
+- 검사면적/샘플링 간격/설비 혼합/측정 단위에 변경이 있으면 결과를 재검증하세요.
+- 실제 회사/고객 Raw Data와 SPEC, 보고서는 공개 GitHub에 무단 업로드하지 마세요.
+
+[최종 요약]
+처음 1회 설치: python -m pip install -r requirements.txt
+예시 실행    : RUN_WINDOWS.bat 더블클릭
+실무 실행    : python main.py --raw "실제CSV경로" --spec "실제SPEC경로" --output "결과폴더"
+결과 확인    : 출력 폴더의 CSV / Excel / PPT / HTML / run_manifest.json
+====================================================
