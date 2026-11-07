@@ -65,9 +65,10 @@ Run the analysis:
 python main.py
 ```
 
-Run automated tests:
+Run automated tests (run the analysis first — the report tests check the files generated in `result/`):
 
 ```bash
+python main.py
 python -m pytest -q
 ```
 
